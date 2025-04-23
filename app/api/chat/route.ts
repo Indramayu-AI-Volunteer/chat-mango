@@ -5,7 +5,7 @@ import { generateText } from 'ai';
 export const maxDuration = 30;
 
 const cacheManager = new GoogleAICacheManager(
-  process.env.GOOGLE_GENERATIVE_AI_API_KEY || 'AIzaSyC3h0u2Vh9BDAqvodxB7NPwRVROXr4YYNM',
+  process.env.GOOGLE_GENERATIVE_AI_API_KEY || '',
 );
 
 type GoogleModelCacheableId = 'models/gemini-2.0-flash';
@@ -30,9 +30,36 @@ function getTokenCount(contents: any[]) {
   return contents.reduce((total, item) => total + item.parts.reduce((sum: number, part: { text: string }) => sum + part.text.split(/\s+/).length, 0), 0);
 }
 
-export async function POST(req: Request) {
-  const { messages } = await req.json(); // messages: OpenAIMessage[]
+// Interface untuk konfigurasi model
+interface ModelConfig {
+  model: string;
+  hf_token?: string;
+  hf_endpoint?: string;
+  hf_model_id?: string;
+}
 
+export async function POST(req: Request) {
+  try {
+    const { messages, config } = await req.json();
+
+    // Default ke Gemini jika tidak ada konfigurasi
+    const modelConfig: ModelConfig = config || { model: "gemini" };
+
+    // Pilih model berdasarkan konfigurasi
+    if (modelConfig.model === "huggingface") {
+      return await handleHuggingfaceRequest(messages, modelConfig);
+    } else {
+      // Default ke Gemini
+      return await handleGeminiRequest(messages);
+    }
+  } catch (error) {
+    console.error('Error in chat API route:', error);
+    return formatErrorResponse("Terjadi kesalahan dalam memproses permintaan Anda.");
+  }
+}
+
+// Handler untuk model Gemini
+async function handleGeminiRequest(messages: OpenAIMessage[]) {
   const geminiContents = toGeminiContents(messages);
 
   // Check token count
@@ -77,40 +104,148 @@ export async function POST(req: Request) {
       prompt: lastUserPrompt,
     });
 
-    console.log('AI response:', text);
+    console.log('Gemini AI response:', text);
 
-    // Format tanggapan dalam format OpenAI yang diharapkan oleh kode klien
-    const response = {
-      choices: [
-        {
-          message: {
-            role: "assistant",
-            content: text
-          }
-        }
-      ]
+    return formatSuccessResponse(text);
+  } catch (error) {
+    console.error('Error generating Gemini response:', error);
+    return formatErrorResponse("Terjadi kesalahan saat menghasilkan respons dari Gemini.");
+  }
+}
+
+// Handler untuk model Huggingface
+async function handleHuggingfaceRequest(messages: OpenAIMessage[], config: ModelConfig) {
+  try {
+    // Validasi konfigurasi yang diperlukan
+    if (!config.hf_token || !config.hf_endpoint) {
+      return formatErrorResponse("HF Token dan Endpoint URL diperlukan untuk menggunakan model Huggingface.");
+    }
+
+    // Gunakan model ID default
+    const modelId = "mistralai/Mistral-7B-Instruct-v0.2";
+    console.log(`Using default Huggingface model: ${modelId}`);
+
+    // Ambil pesan terakhir dari pengguna
+    const lastUserMessage = messages
+      .slice()
+      .reverse()
+      .find(m => m.role === 'user');
+
+    if (!lastUserMessage) {
+      return formatErrorResponse("Tidak dapat menemukan pesan pengguna.");
+    }
+
+    // Batas token untuk model Huggingface
+    const TOKEN_LIMIT = 1024;
+    const MIN_OUTPUT_TOKENS = 100;
+
+    // Estimasi ukuran input dalam token (perkiraan kasar: 1 token ≈ 4 karakter)
+    const inputLength = lastUserMessage.content.length;
+    const estimatedTokens = Math.ceil(inputLength / 4);
+
+    // Jika input terlalu panjang, potong agar masih ada ruang untuk output
+    let processedInput = lastUserMessage.content;
+    if (estimatedTokens > TOKEN_LIMIT - MIN_OUTPUT_TOKENS) {
+      // Kita perlu memotong input
+      const maxInputChars = (TOKEN_LIMIT - MIN_OUTPUT_TOKENS) * 4;
+      processedInput = processedInput.substring(0, maxInputChars) + "... [teks terpotong karena terlalu panjang]";
+      console.log(`Input terlalu panjang, dipotong dari ${inputLength} ke ${processedInput.length} karakter`);
+    }
+
+    // Hitung ulang estimasi token setelah pemotongan
+    const finalEstimatedTokens = Math.ceil(processedInput.length / 4);
+    const maxNewTokens = Math.max(MIN_OUTPUT_TOKENS, TOKEN_LIMIT - finalEstimatedTokens);
+
+    console.log(`Estimated input tokens: ${finalEstimatedTokens}, Setting max_new_tokens: ${maxNewTokens}`);
+
+    // Buat payload untuk API Huggingface
+    const payload = {
+      inputs: processedInput,
+      parameters: {
+        max_new_tokens: maxNewTokens,
+        temperature: 0.7,
+        top_p: 0.9,
+        do_sample: true,
+      }
     };
 
-    return new Response(JSON.stringify(response), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+    // Panggil API Huggingface
+    const response = await fetch(config.hf_endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.hf_token}`
+      },
+      body: JSON.stringify(payload)
     });
-  } catch (error) {
-    console.error('Error generating response:', error);
 
-    // Return error response in OpenAI format
-    return new Response(JSON.stringify({
-      choices: [
-        {
-          message: {
-            role: "assistant",
-            content: "Maaf, terjadi kesalahan saat memproses permintaan Anda."
-          }
-        }
-      ]
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    if (!response.ok) {
+      const errorDetails = await response.text();
+      console.error('Huggingface API error:', errorDetails);
+      return formatErrorResponse(`Kesalahan dari Huggingface API: ${response.status}`);
+    }
+
+    // Parse respons dari Huggingface
+    const result = await response.json();
+
+    // Format respons sesuai dengan apa yang dikembalikan oleh Huggingface
+    let aiResponse;
+
+    // Huggingface dapat mengembalikan berbagai format berdasarkan model
+    if (Array.isArray(result) && result[0] && typeof result[0].generated_text === 'string') {
+      // Format untuk model teks generatif
+      aiResponse = result[0].generated_text;
+    } else if (typeof result.generated_text === 'string') {
+      // Format alternatif
+      aiResponse = result.generated_text;
+    } else if (Array.isArray(result) && typeof result[0] === 'string') {
+      // Beberapa model mengembalikan array string
+      aiResponse = result[0];
+    } else {
+      // Fallback, kembalikan JSON string jika format tidak dikenal
+      aiResponse = JSON.stringify(result);
+    }
+
+    console.log('Huggingface AI response:', aiResponse);
+    return formatSuccessResponse(aiResponse);
+  } catch (error) {
+    console.error('Error generating Huggingface response:', error);
+    return formatErrorResponse("Terjadi kesalahan saat menghasilkan respons dari Huggingface.");
   }
+}
+
+// Fungsi helper untuk memformat respons sukses
+function formatSuccessResponse(text: string) {
+  const response = {
+    choices: [
+      {
+        message: {
+          role: "assistant",
+          content: text
+        }
+      }
+    ]
+  };
+
+  return new Response(JSON.stringify(response), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+// Fungsi helper untuk memformat respons error
+function formatErrorResponse(errorMessage: string) {
+  return new Response(JSON.stringify({
+    choices: [
+      {
+        message: {
+          role: "assistant",
+          content: errorMessage
+        }
+      }
+    ]
+  }), {
+    status: 500,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
