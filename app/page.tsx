@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Send, Bot, User, Loader2, Settings, Save, ExternalLink } from "lucide-react"
+import { Send, User, Loader2, Settings, Save, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { MangoIcon } from "./components/MangoIcon"
 
 // Tentukan tipe pesan chat
 interface ChatMessage {
@@ -292,7 +293,7 @@ export default function ChatPage() {
         {/* Header */}
         <header className="flex items-center justify-between px-4 py-3 border-b bg-[#FDBE02] text-white">
           <div className="flex items-center">
-            <Bot className="w-6 h-6 mr-2" />
+            <MangoIcon className="w-6 h-6 mr-2 text-white" />
             <h1 className="text-xl font-bold">chatMango</h1>
           </div>
           <Button
@@ -309,7 +310,7 @@ export default function ChatPage() {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
-              <Bot className="w-12 h-12 mb-4 text-[#FDBE02]" />
+              <MangoIcon className="w-12 h-12 mb-4 text-[#FDBE02]" />
               <h2 className="text-xl font-semibold mb-2">Welcome to chatMango</h2>
               <p className="max-w-md">
                 Ask me anything and I'll do my best to help you. I can answer questions, provide information, and assist
@@ -353,7 +354,7 @@ export default function ChatPage() {
                         "bg-[#FDBE02] text-white"
                       )}
                     >
-                      <Bot className="w-5 h-5" />
+                      <MangoIcon className="w-5 h-5" />
                     </div>
                     <div
                       className={cn(
@@ -370,8 +371,8 @@ export default function ChatPage() {
           )}
           {isLoading && (
             <div className="flex items-start gap-3 max-w-3xl mr-auto">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full shrink-0 bg-[#FDBE02] text-black">
-                <Bot className="w-5 h-5" />
+              <div className="flex items-center justify-center w-8 h-8 rounded-full shrink-0 bg-[#FDBE02] text-white">
+                <MangoIcon className="w-5 h-5" />
               </div>
               <div className="rounded-lg px-4 py-2 bg-white border border-gray-200 text-black">
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -402,7 +403,7 @@ export default function ChatPage() {
             <Button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="bg-[#FDBE02] hover:bg-[#E5AB02] text-black"
+              className="bg-[#FDBE02] hover:bg-[#E5AB02] text-white"
             >
               <Send className="w-4 h-4" />
               <span className="sr-only">Send</span>
