@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Send, User, Loader2, Settings, Save, ExternalLink, Maximize, Minimize } from "lucide-react"
+import { Send, User, Loader2, Settings, Save, ExternalLink, Maximize, Minimize, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
@@ -24,6 +24,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { useRouter } from "next/navigation"
 
 // Tentukan tipe pesan chat
 interface ChatMessage {
@@ -43,6 +45,8 @@ const geminiVersions = [
 ];
 
 export default function ChatPage() {
+  const router = useRouter();
+  const [accountOpen, setAccountOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -50,7 +54,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // State untuk sidebar
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState("gemini");
   const [geminiVersion, setGeminiVersion] = useState("gemini-2.0-flash");
   const [hfToken, setHfToken] = useState("");
@@ -60,6 +64,96 @@ export default function ChatPage() {
 
   // State untuk mode tampilan
   const [viewMode, setViewMode] = useState<ViewMode>('lightwidescreen');
+
+  // Chat sessions state and persistence
+  interface Session {
+    id: string;
+    name: string;
+    messages: ChatMessage[];
+    createdAt: number;
+  }
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>("");
+
+  // Load sessions from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem("chatSessions");
+    let parsed: Session[] = [];
+    try {
+      parsed = stored ? JSON.parse(stored) : [];
+    } catch {
+      parsed = [];
+    }
+    if (parsed.length > 0) {
+      setSessions(parsed);
+      const storedId = localStorage.getItem("currentSessionId");
+      const exists = storedId && parsed.some(s => s.id === storedId);
+      const targetId = exists ? storedId! : parsed[0].id;
+      setCurrentSessionId(targetId);
+      setMessages(parsed.find(s => s.id === targetId)!.messages);
+      localStorage.setItem("currentSessionId", targetId);
+    } else {
+      const id = Date.now().toString();
+      const newSess: Session = { id, name: `Session ${new Date().toLocaleString()}`, messages: [], createdAt: Date.now() };
+      setSessions([newSess]);
+      setCurrentSessionId(id);
+      setMessages([]);
+      localStorage.setItem("chatSessions", JSON.stringify([newSess]));
+      localStorage.setItem("currentSessionId", id);
+    }
+  }, []);
+
+  // Update sessions when messages change
+  useEffect(() => {
+    if (!currentSessionId) return;
+    setSessions(prev =>
+      prev.map(s => s.id === currentSessionId ? { ...s, messages } : s)
+    );
+  }, [messages, currentSessionId]);
+
+  // Persist sessions to localStorage
+  useEffect(() => {
+    localStorage.setItem("chatSessions", JSON.stringify(sessions));
+  }, [sessions]);
+
+  const selectSession = (id: string) => {
+    const sess = sessions.find(s => s.id === id);
+    if (sess) {
+      setCurrentSessionId(id);
+      setMessages(sess.messages);
+      localStorage.setItem("currentSessionId", id);
+    }
+  };
+
+  const newSession = () => {
+    const id = Date.now().toString();
+    const name = `Session ${new Date().toLocaleString()}`;
+    const newSess: Session = { id, name, messages: [], createdAt: Date.now() };
+    setSessions(prev => [...prev, newSess]);
+    selectSession(id);
+  };
+
+  // Delete a session, and update current session if needed
+  const deleteSession = (id: string) => {
+    setSessions(prev => prev.filter(s => s.id !== id));
+    if (id === currentSessionId) {
+      const remaining = sessions.filter(s => s.id !== id);
+      if (remaining.length > 0) {
+        const next = remaining[0];
+        setCurrentSessionId(next.id);
+        setMessages(next.messages);
+        localStorage.setItem("currentSessionId", next.id);
+      } else {
+        // No sessions left, create new
+        const newId = Date.now().toString();
+        const fresh: Session = { id: newId, name: `Session ${new Date().toLocaleString()}`, messages: [], createdAt: Date.now() };
+        setSessions([fresh]);
+        setCurrentSessionId(newId);
+        setMessages([]);
+        localStorage.setItem("currentSessionId", newId);
+      }
+    }
+  };
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -178,7 +272,7 @@ export default function ChatPage() {
     }));
 
     // Tutup sidebar
-    setIsSidebarOpen(false);
+    setSettingsOpen(false);
   };
 
   // Load settings from localStorage
@@ -208,144 +302,214 @@ export default function ChatPage() {
         "flex w-full min-h-[90vh] max-h-[90vh] bg-white",
         viewMode === 'lightwidescreen' && "rounded-2xl overflow-hidden shadow-lg max-w-[80%] mx-auto"
       )}>
-        {/* Sidebar */}
-        <div
-          className={cn(
-            "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r transform transition-transform duration-300 ease-in-out overflow-y-auto max-h-screen",
-            isSidebarOpen ? "translate-x-0" : "-translate-x-full",
-            viewMode === 'lightwidescreen' ? "rounded-l-2xl" : "",
-            "md:relative md:translate-x-0", // Always visible on larger screens
-          )}
-        >
-          <div className="flex flex-col h-full p-4">
-            <h2 className="text-lg font-semibold mb-4">Settings</h2>
-
-            <div className="space-y-6 flex-1">
-              {/* Model Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="model-select">Select Model</Label>
-                <Select
-                  value={selectedModel}
-                  onValueChange={setSelectedModel}
-                >
-                  <SelectTrigger id="model-select">
-                    <SelectValue placeholder="Select a model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="gemini">Gemini</SelectItem>
-                    <SelectItem value="huggingface">Huggingface</SelectItem>
-                    <SelectItem value="colab">Google Colab(FastAPI)</SelectItem>
-                    <SelectItem value="pellm">PeLLM-Komodo (unavailable)</SelectItem>
-                    <SelectItem value="vllm">VLLM (unavailable)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Gemini Settings */}
-              {selectedModel === "gemini" && (
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="gemini-version" className="text-sm font-medium">Gemini Version</Label>
-                    <Select
-                      value={geminiVersion}
-                      onValueChange={setGeminiVersion}
+        {/* Sidebar with sessions and Settings */}
+        <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r flex flex-col justify-between md:relative md:translate-x-0">
+          {/* Sessions list */}
+          <div className="overflow-y-auto flex-1 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Chat Sessions</h3>
+              <Button variant="ghost" size="icon" onClick={newSession}>
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            <ul className="space-y-2">
+              {sessions.map(sess => (
+                <li key={sess.id}>
+                  <div className="flex items-center justify-between group">
+                    <button
+                      onClick={() => selectSession(sess.id)}
+                      className={cn(
+                        "flex-1 text-left px-2 py-1 rounded",
+                        sess.id === currentSessionId
+                          ? "bg-[#FDBE02] text-white"
+                          : "hover:bg-gray-100 text-gray-800"
+                      )}
                     >
-                      <SelectTrigger id="gemini-version">
-                        <SelectValue placeholder="Select version" />
+                      {sess.name}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteSession(sess.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-red-500"
+                      aria-label="Delete session"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+          {/* Settings trigger */}
+          <div className="p-4 border-t space-y-2">
+            {/* Account trigger */}
+            <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="w-full justify-start">
+                  <User className="w-5 h-5 mr-2" />
+                  Account
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Account</DialogTitle>
+                </DialogHeader>
+                <DialogFooter className="flex space-x-2">
+                  <Button variant="outline" onClick={() => { setAccountOpen(false); router.push("/login"); }}>
+                    Login
+                  </Button>
+                  <Button onClick={() => { setAccountOpen(false); router.push("/register"); }}>
+                    Register
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            {/* Feedback & Donate buttons */}
+            <Button variant="ghost" size="icon" className="w-full justify-start" onClick={() => window.open('https://example.com/feedback', '_blank')}>
+              <ExternalLink className="w-5 h-5 mr-2" />
+              Feedback
+            </Button>
+            <Button variant="ghost" size="icon" className="w-full justify-start" onClick={() => window.open('https://example.com/donate', '_blank')}>
+              <ExternalLink className="w-5 h-5 mr-2" />
+              Donate
+            </Button>
+            {/* Settings trigger */}
+            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="w-full justify-start">
+                  <Settings className="w-5 h-5 mr-2" />
+                  Settings
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Settings</DialogTitle>
+                  <DialogDescription>Configure your model and endpoints</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6">
+                  {/* Model Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="model-select">Select Model</Label>
+                    <Select
+                      value={selectedModel}
+                      onValueChange={setSelectedModel}
+                    >
+                      <SelectTrigger id="model-select">
+                        <SelectValue placeholder="Select a model" />
                       </SelectTrigger>
                       <SelectContent>
-                        {geminiVersions.map((version) => (
-                          <SelectItem key={version} value={version}>
-                            {version}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="gemini">Gemini</SelectItem>
+                        <SelectItem value="huggingface">Huggingface</SelectItem>
+                        <SelectItem value="colab">Google Colab(FastAPI)</SelectItem>
+                        <SelectItem value="pellm">PeLLM-Komodo (unavailable)</SelectItem>
+                        <SelectItem value="vllm">VLLM (unavailable)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-              )}
 
-              {/* Huggingface Settings */}
-              {selectedModel === "huggingface" && (
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="hf-token" className="text-sm font-medium">HF Token</Label>
-                    <Input
-                      id="hf-token"
-                      type="password"
-                      value={hfToken}
-                      onChange={(e) => setHfToken(e.target.value)}
-                      placeholder="Enter Huggingface Token"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="hf-endpoint" className="text-sm font-medium">HF Endpoint URL</Label>
-                    <Input
-                      id="hf-endpoint"
-                      type="text"
-                      value={hfEndpoint}
-                      onChange={(e) => setHfEndpoint(e.target.value)}
-                      placeholder="Enter Endpoint URL"
-                    />
-                  </div>
-                </div>
-              )}
+                  {/* Gemini Settings */}
+                  {selectedModel === "gemini" && (
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="gemini-version" className="text-sm font-medium">Gemini Version</Label>
+                        <Select
+                          value={geminiVersion}
+                          onValueChange={setGeminiVersion}
+                        >
+                          <SelectTrigger id="gemini-version">
+                            <SelectValue placeholder="Select version" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {geminiVersions.map((version) => (
+                              <SelectItem key={version} value={version}>
+                                {version}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
 
-              {/* Google Colab Settings */}
-              {selectedModel === "colab" && (
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="colab-endpoint" className="text-sm font-medium">URL Endpoint</Label>
-                    <Input
-                      id="colab-endpoint"
-                      type="text"
-                      value={colabEndpoint}
-                      onChange={(e) => setColabEndpoint(e.target.value)}
-                      placeholder="https://your-ngrok-url/"
-                    />
-                  </div>
-                  <Alert className="bg-blue-50 text-blue-800 border-blue-200 text-xs">
-                    <AlertDescription>
-                      Contoh kode google colab bisa diakses pada {" "}
-                      <a href="https://colab.research.google.com/drive/1SvPh9n00W-x82k8xlZtYj0F6AZHKJ0tz?usp=sharing" target="_blank" rel="noopener noreferrer" className="underline text-blue-600 flex items-center">
-                        URL Google Colab
-                        <ExternalLink className="ml-1 w-3 h-3" />
-                      </a>
-                      {" "}atau bisa diakses pada link{" "}
-                      <a href="https://inihanyalahcontohurlsaja2.com/" target="_blank" rel="noopener noreferrer" className="underline text-blue-600 flex items-center">
-                        inihanyalahcontohurlsaja2.com (unavailable)
-                        <ExternalLink className="ml-1 w-3 h-3" />
-                      </a>
-                    </AlertDescription>
-                  </Alert>
-                </div>
-              )}
+                  {/* Huggingface Settings */}
+                  {selectedModel === "huggingface" && (
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="hf-token" className="text-sm font-medium">HF Token</Label>
+                        <Input
+                          id="hf-token"
+                          type="password"
+                          value={hfToken}
+                          onChange={(e) => setHfToken(e.target.value)}
+                          placeholder="Enter Huggingface Token"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="hf-endpoint" className="text-sm font-medium">HF Endpoint URL</Label>
+                        <Input
+                          id="hf-endpoint"
+                          type="text"
+                          value={hfEndpoint}
+                          onChange={(e) => setHfEndpoint(e.target.value)}
+                          placeholder="Enter Endpoint URL"
+                        />
+                      </div>
+                    </div>
+                  )}
 
-              {/* VLLM Settings */}
-              {selectedModel === "vllm" && (
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="vllm-endpoint" className="text-sm font-medium">URL Endpoint</Label>
-                    <Input
-                      id="vllm-endpoint"
-                      type="text"
-                      value={vllmEndpoint}
-                      onChange={(e) => setVllmEndpoint(e.target.value)}
-                      placeholder="https://your-vllm-endpoint/"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+                  {/* Google Colab Settings */}
+                  {selectedModel === "colab" && (
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="colab-endpoint" className="text-sm font-medium">URL Endpoint</Label>
+                        <Input
+                          id="colab-endpoint"
+                          type="text"
+                          value={colabEndpoint}
+                          onChange={(e) => setColabEndpoint(e.target.value)}
+                          placeholder="https://your-ngrok-url/"
+                        />
+                      </div>
+                      <Alert className="bg-blue-50 text-blue-800 border-blue-200 text-xs">
+                        <AlertDescription>
+                          Contoh kode google colab bisa diakses pada {" "}
+                          <a href="https://colab.research.google.com/drive/1SvPh9n00W-x82k8xlZtYj0F6AZHKJ0tz?usp=sharing" target="_blank" rel="noopener noreferrer" className="underline text-blue-600 flex items-center">
+                            URL Google Colab
+                            <ExternalLink className="ml-1 w-3 h-3" />
+                          </a>
+                          {" "}atau bisa diakses pada link{" "}
+                          <a href="https://inihanyalahcontohurlsaja2.com/" target="_blank" rel="noopener noreferrer" className="underline text-blue-600 flex items-center">
+                            inihanyalahcontohurlsaja2.com (unavailable)
+                            <ExternalLink className="ml-1 w-3 h-3" />
+                          </a>
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  )}
 
-            {/* Save Button */}
-            <Button
-              className="mt-4 bg-[#FDBE02] hover:bg-[#E5AB02] text-white"
-              onClick={handleSaveSettings}
-            >
-              <Save className="w-4 h-4 mr-2" />
-              Save Settings
-            </Button>
+                  {/* VLLM Settings */}
+                  {selectedModel === "vllm" && (
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="vllm-endpoint" className="text-sm font-medium">URL Endpoint</Label>
+                        <Input
+                          id="vllm-endpoint"
+                          type="text"
+                          value={vllmEndpoint}
+                          onChange={(e) => setVllmEndpoint(e.target.value)}
+                          placeholder="https://your-vllm-endpoint/"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button onClick={handleSaveSettings}>Save Settings</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
@@ -379,16 +543,6 @@ export default function ChatPage() {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-
-              {/* Settings Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="md:hidden text-white hover:bg-[#E5AB02]"
-              >
-                <Settings className="w-5 h-5" />
-              </Button>
             </div>
           </header>
 
