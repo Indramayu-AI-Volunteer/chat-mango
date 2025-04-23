@@ -311,8 +311,8 @@ export default function ChatPage() {
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
               <MangoIcon className="w-12 h-12 mb-4 text-[#FDBE02]" />
-              <h2 className="text-xl font-semibold mb-2">Welcome to chatMango</h2>
-              <p className="max-w-md">
+              <h2 className="text-xl font-semibold mb-2 text-[#FDBE02]">Welcome to chatMango</h2>
+              <p className="max-w-md text-[#FDBE02]">
                 Ask me anything and I'll do my best to help you. I can answer questions, provide information, and assist
                 with various tasks.
               </p>
