@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { MangoIcon } from "./components/MangoIcon"
+import { TopengIcon } from "./components/TopengIcon"
 import {
   Tooltip,
   TooltipContent,
@@ -369,8 +370,8 @@ export default function ChatPage() {
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
-                <MangoIcon className="w-12 h-12 mb-4 text-[#FDBE02]" />
+              <div className="flex flex-col items-center justify-center h-full text-center text-[#FDBE02]">
+                <TopengIcon style={{ width: '14rem', height: '14rem' }} className="mb-4 text-[#FDBE02]" />
                 <h2 className="text-xl font-semibold mb-2">Welcome to chatMango</h2>
                 <p className="max-w-md">
                   Ask me anything and I'll do my best to help you. I can answer questions, provide information, and assist
