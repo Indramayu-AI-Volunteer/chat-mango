@@ -27,8 +27,7 @@ const geminiVersions = [
   "gemini-1.0-pro",
   "gemini-1.5-pro",
   "gemini-1.5-flash",
-  "gemini-2.0-flash",
-  "gemini-2.0-pro"
+  "gemini-2.0-flash"
 ];
 
 export default function ChatPage() {
@@ -279,7 +278,7 @@ export default function ChatPage() {
 
           {/* Save Button */}
           <Button
-            className="mt-4 bg-[#FDBE02] hover:bg-[#E5AB02] text-black"
+            className="mt-4 bg-[#FDBE02] hover:bg-[#E5AB02] text-white"
             onClick={handleSaveSettings}
           >
             <Save className="w-4 h-4 mr-2" />
@@ -291,7 +290,7 @@ export default function ChatPage() {
       {/* Main Content */}
       <div className="flex flex-col flex-1 h-full">
         {/* Header */}
-        <header className="flex items-center justify-between px-4 py-3 border-b bg-[#FDBE02] text-black">
+        <header className="flex items-center justify-between px-4 py-3 border-b bg-[#FDBE02] text-white">
           <div className="flex items-center">
             <Bot className="w-6 h-6 mr-2" />
             <h1 className="text-xl font-bold">chatMango</h1>
@@ -331,7 +330,7 @@ export default function ChatPage() {
                     <div
                       className={cn(
                         "rounded-lg px-4 py-2 max-w-[85%]",
-                        "bg-black text-white"
+                        "bg-[#FDBE02] text-white"
                       )}
                     >
                       <div className="prose prose-sm whitespace-pre-wrap text-right">{message.content}</div>
@@ -339,7 +338,7 @@ export default function ChatPage() {
                     <div
                       className={cn(
                         "flex items-center justify-center w-8 h-8 rounded-full shrink-0",
-                        "bg-black text-white"
+                        "bg-[#FDBE02] text-white"
                       )}
                     >
                       <User className="w-5 h-5" />
@@ -351,7 +350,7 @@ export default function ChatPage() {
                     <div
                       className={cn(
                         "flex items-center justify-center w-8 h-8 rounded-full shrink-0",
-                        "bg-[#FDBE02] text-black"
+                        "bg-[#FDBE02] text-white"
                       )}
                     >
                       <Bot className="w-5 h-5" />
