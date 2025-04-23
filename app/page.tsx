@@ -17,6 +17,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { MangoIcon } from "./components/MangoIcon"
 import { TopengIcon } from "./components/TopengIcon"
+import { MarkdownMessage } from "./components/MarkdownMessage"
 import {
   Tooltip,
   TooltipContent,
@@ -55,6 +56,7 @@ export default function ChatPage() {
   const [hfToken, setHfToken] = useState("");
   const [hfEndpoint, setHfEndpoint] = useState("");
   const [colabEndpoint, setColabEndpoint] = useState("");
+  const [vllmEndpoint, setVllmEndpoint] = useState("");
 
   // State untuk mode tampilan
   const [viewMode, setViewMode] = useState<ViewMode>('lightwidescreen');
@@ -128,6 +130,9 @@ export default function ChatPage() {
             }),
             ...(selectedModel === "colab" && {
               colab_endpoint: colabEndpoint
+            }),
+            ...(selectedModel === "vllm" && {
+              vllm_endpoint: vllmEndpoint
             })
           }
         }),
@@ -168,7 +173,8 @@ export default function ChatPage() {
       geminiVersion: geminiVersion,
       hfToken: hfToken,
       hfEndpoint: hfEndpoint,
-      colabEndpoint: colabEndpoint
+      colabEndpoint: colabEndpoint,
+      vllmEndpoint: vllmEndpoint
     }));
 
     // Tutup sidebar
@@ -186,6 +192,7 @@ export default function ChatPage() {
         setHfToken(settings.hfToken || "");
         setHfEndpoint(settings.hfEndpoint || "");
         setColabEndpoint(settings.colabEndpoint || "");
+        setVllmEndpoint(settings.vllmEndpoint || "");
       } catch (error) {
         console.error("Error parsing saved settings:", error);
       }
@@ -194,17 +201,17 @@ export default function ChatPage() {
 
   return (
     <div className={cn(
-      "flex min-h-screen bg-gray-50 transition-all duration-300 ease-in-out",
+      "flex min-h-screen max-h-screen overflow-hidden bg-gray-50 transition-all duration-300 ease-in-out",
       viewMode === 'lightwidescreen' && "p-4"
     )}>
       <div className={cn(
-        "flex w-full min-h-[90vh] bg-white",
-        viewMode === 'lightwidescreen' && "rounded-2xl overflow-hidden shadow-lg max-w-[90%] mx-auto"
+        "flex w-full min-h-[90vh] max-h-[90vh] bg-white",
+        viewMode === 'lightwidescreen' && "rounded-2xl overflow-hidden shadow-lg max-w-[80%] mx-auto"
       )}>
         {/* Sidebar */}
         <div
           className={cn(
-            "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r transform transition-transform duration-300 ease-in-out",
+            "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r transform transition-transform duration-300 ease-in-out overflow-y-auto max-h-screen",
             isSidebarOpen ? "translate-x-0" : "-translate-x-full",
             viewMode === 'lightwidescreen' ? "rounded-l-2xl" : "",
             "md:relative md:translate-x-0", // Always visible on larger screens
@@ -228,6 +235,8 @@ export default function ChatPage() {
                     <SelectItem value="gemini">Gemini</SelectItem>
                     <SelectItem value="huggingface">Huggingface</SelectItem>
                     <SelectItem value="colab">Google Colab(FastAPI)</SelectItem>
+                    <SelectItem value="pellm">PeLLM-Komodo (unavailable)</SelectItem>
+                    <SelectItem value="vllm">VLLM (unavailable)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -311,6 +320,22 @@ export default function ChatPage() {
                   </Alert>
                 </div>
               )}
+
+              {/* VLLM Settings */}
+              {selectedModel === "vllm" && (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="vllm-endpoint" className="text-sm font-medium">URL Endpoint</Label>
+                    <Input
+                      id="vllm-endpoint"
+                      type="text"
+                      value={vllmEndpoint}
+                      onChange={(e) => setVllmEndpoint(e.target.value)}
+                      placeholder="https://your-vllm-endpoint/"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Save Button */}
@@ -325,9 +350,9 @@ export default function ChatPage() {
         </div>
 
         {/* Main Content */}
-        <div className="flex flex-col flex-1 h-full">
+        <div className="flex flex-col flex-1 h-full max-h-full overflow-hidden">
           {/* Header */}
-          <header className="flex items-center justify-between px-4 py-3 border-b bg-[#FDBE02] text-white">
+          <header className="flex items-center justify-between px-4 py-3 border-b bg-[#FDBE02] text-white flex-shrink-0">
             <div className="flex items-center">
               <MangoIcon className="w-6 h-6 mr-2 text-white" />
               <h1 className="text-xl font-bold">chatMango</h1>
@@ -407,7 +432,7 @@ export default function ChatPage() {
                       </div>
                     </>
                   ) : (
-                    // Assistant message - Remain as is
+                    // Assistant message - Now using MarkdownMessage component
                     <>
                       <div
                         className={cn(
@@ -423,7 +448,7 @@ export default function ChatPage() {
                           "bg-white border border-gray-200 text-black"
                         )}
                       >
-                        <div className="prose prose-sm whitespace-pre-wrap">{message.content}</div>
+                        <MarkdownMessage content={message.content} />
                       </div>
                     </>
                   )}
@@ -444,7 +469,7 @@ export default function ChatPage() {
           </div>
 
           {/* Input Form */}
-          <div className="border-t p-4 bg-white">
+          <div className="border-t p-4 bg-white flex-shrink-0">
             <form onSubmit={handleSubmit} className="flex items-end gap-2 max-w-3xl mx-auto">
               <Textarea
                 value={input}

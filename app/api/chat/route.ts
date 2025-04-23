@@ -48,6 +48,7 @@ interface ModelConfig {
   hf_endpoint?: string;
   hf_model_id?: string;
   colab_endpoint?: string;
+  vllm_endpoint?: string;
 }
 
 export async function POST(req: Request) {
@@ -62,6 +63,8 @@ export async function POST(req: Request) {
       return await handleHuggingfaceRequest(messages, modelConfig);
     } else if (modelConfig.model === "colab") {
       return await handleColabRequest(messages, modelConfig);
+    } else if (modelConfig.model === "vllm") {
+      return await handleVLLMRequest(messages, modelConfig);
     } else {
       // Default ke Gemini
       return await handleGeminiRequest(messages, modelConfig);
@@ -308,6 +311,86 @@ async function handleColabRequest(messages: OpenAIMessage[], config: ModelConfig
   } catch (error) {
     console.error('Error generating Colab response:', error);
     return formatErrorResponse("Terjadi kesalahan saat menghasilkan respons dari Google Colab.");
+  }
+}
+
+// Handler untuk model VLLM
+async function handleVLLMRequest(messages: OpenAIMessage[], config: ModelConfig) {
+  try {
+    // Validasi konfigurasi yang diperlukan
+    if (!config.vllm_endpoint) {
+      return formatErrorResponse("URL Endpoint diperlukan untuk menggunakan model VLLM.");
+    }
+
+    // Gunakan endpoint apa adanya, tanpa modifikasi
+    let endpoint = config.vllm_endpoint.trim();
+
+    console.log(`Mencoba menghubungi endpoint VLLM: ${endpoint}`);
+
+    // Format pesan ke format OpenAI
+    const formattedMessages = messages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+
+    // Buat payload sesuai dengan format OpenAI chat completion
+    const payload = {
+      model: "any", // Parameter model default sesuai contoh
+      messages: formattedMessages,
+      max_tokens: 512
+    };
+
+    // Panggil API VLLM dengan timeout yang lebih panjang
+    let response;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 detik timeout
+
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+    } catch (fetchError: any) {
+      console.error('Fetch error details:', fetchError);
+      return formatErrorResponse(`Gagal terhubung ke endpoint VLLM. Detail error: ${fetchError.message}`);
+    }
+
+    if (!response.ok) {
+      const errorDetails = await response.text();
+      console.error('VLLM API error. Status:', response.status, 'Details:', errorDetails);
+      return formatErrorResponse(`Kesalahan dari VLLM API: ${response.status}. ${errorDetails}`);
+    }
+
+    // Parse respons dari VLLM
+    const result = await response.json();
+    console.log('VLLM response raw:', JSON.stringify(result).substring(0, 200) + '...');
+
+    // Format respons dari OpenAI-compatible API
+    let aiResponse;
+
+    if (result.choices && result.choices.length > 0 && result.choices[0].message) {
+      aiResponse = result.choices[0].message.content;
+    } else if (typeof result.generated_text === 'string') {
+      aiResponse = result.generated_text;
+    } else if (typeof result.text === 'string') {
+      aiResponse = result.text;
+    } else {
+      // Fallback, kembalikan JSON string jika format tidak dikenal
+      aiResponse = JSON.stringify(result);
+    }
+
+    console.log('VLLM AI response:', aiResponse);
+    return formatSuccessResponse(aiResponse);
+  } catch (error) {
+    console.error('Error generating VLLM response:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return formatErrorResponse(`Terjadi kesalahan saat menghasilkan respons dari VLLM: ${errorMessage}`);
   }
 }
 
