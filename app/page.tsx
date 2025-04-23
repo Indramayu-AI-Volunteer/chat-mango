@@ -1,19 +1,35 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Send, Bot, User, Loader2, Settings, Save } from "lucide-react"
+import { Send, Bot, User, Loader2, Settings, Save, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 // Tentukan tipe pesan chat
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
+
+// Daftar versi model Gemini
+const geminiVersions = [
+  "gemini-1.0-pro",
+  "gemini-1.5-pro",
+  "gemini-1.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.0-pro"
+];
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -25,8 +41,10 @@ export default function ChatPage() {
   // State untuk sidebar
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState("gemini");
+  const [geminiVersion, setGeminiVersion] = useState("gemini-2.0-flash");
   const [hfToken, setHfToken] = useState("");
   const [hfEndpoint, setHfEndpoint] = useState("");
+  const [colabEndpoint, setColabEndpoint] = useState("");
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -73,9 +91,15 @@ export default function ChatPage() {
           messages: [...messages, userMessage],
           config: {
             model: selectedModel,
+            ...(selectedModel === "gemini" && {
+              gemini_version: geminiVersion
+            }),
             ...(selectedModel === "huggingface" && {
               hf_token: hfToken,
               hf_endpoint: hfEndpoint
+            }),
+            ...(selectedModel === "colab" && {
+              colab_endpoint: colabEndpoint
             })
           }
         }),
@@ -113,8 +137,10 @@ export default function ChatPage() {
     // Simpan pengaturan (bisa ditambahkan ke localStorage)
     localStorage.setItem("chatSettings", JSON.stringify({
       model: selectedModel,
+      geminiVersion: geminiVersion,
       hfToken: hfToken,
-      hfEndpoint: hfEndpoint
+      hfEndpoint: hfEndpoint,
+      colabEndpoint: colabEndpoint
     }));
 
     // Tutup sidebar
@@ -128,8 +154,10 @@ export default function ChatPage() {
       try {
         const settings = JSON.parse(savedSettings);
         setSelectedModel(settings.model || "gemini");
+        setGeminiVersion(settings.geminiVersion || "gemini-2.0-flash");
         setHfToken(settings.hfToken || "");
         setHfEndpoint(settings.hfEndpoint || "");
+        setColabEndpoint(settings.colabEndpoint || "");
       } catch (error) {
         console.error("Error parsing saved settings:", error);
       }
@@ -152,18 +180,45 @@ export default function ChatPage() {
           <div className="space-y-6 flex-1">
             {/* Model Selection */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Select Model</Label>
-              <RadioGroup value={selectedModel} onValueChange={setSelectedModel}>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="gemini" id="gemini" />
-                  <Label htmlFor="gemini">Gemini</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="huggingface" id="huggingface" />
-                  <Label htmlFor="huggingface">Huggingface</Label>
-                </div>
-              </RadioGroup>
+              <Label htmlFor="model-select">Select Model</Label>
+              <Select
+                value={selectedModel}
+                onValueChange={setSelectedModel}
+              >
+                <SelectTrigger id="model-select">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gemini">Gemini</SelectItem>
+                  <SelectItem value="huggingface">Huggingface</SelectItem>
+                  <SelectItem value="colab">Google Colab(FastAPI)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Gemini Settings */}
+            {selectedModel === "gemini" && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="gemini-version" className="text-sm font-medium">Gemini Version</Label>
+                  <Select
+                    value={geminiVersion}
+                    onValueChange={setGeminiVersion}
+                  >
+                    <SelectTrigger id="gemini-version">
+                      <SelectValue placeholder="Select version" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {geminiVersions.map((version) => (
+                        <SelectItem key={version} value={version}>
+                          {version}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
 
             {/* Huggingface Settings */}
             {selectedModel === "huggingface" && (
@@ -188,6 +243,36 @@ export default function ChatPage() {
                     placeholder="Enter Endpoint URL"
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Google Colab Settings */}
+            {selectedModel === "colab" && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="colab-endpoint" className="text-sm font-medium">URL Endpoint</Label>
+                  <Input
+                    id="colab-endpoint"
+                    type="text"
+                    value={colabEndpoint}
+                    onChange={(e) => setColabEndpoint(e.target.value)}
+                    placeholder="https://your-ngrok-url/"
+                  />
+                </div>
+                <Alert className="bg-blue-50 text-blue-800 border-blue-200 text-xs">
+                  <AlertDescription>
+                    Contoh kode google colab bisa diakses pada {" "}
+                    <a href="https://colab.research.google.com/drive/1SvPh9n00W-x82k8xlZtYj0F6AZHKJ0tz?usp=sharing" target="_blank" rel="noopener noreferrer" className="underline text-blue-600 flex items-center">
+                      URL Google Colab
+                      <ExternalLink className="ml-1 w-3 h-3" />
+                    </a>
+                    {" "}atau bisa diakses pada link{" "}
+                    <a href="https://inihanyalahcontohurlsaja2.com/" target="_blank" rel="noopener noreferrer" className="underline text-blue-600 flex items-center">
+                      inihanyalahcontohurlsaja2.com (unavailable)
+                      <ExternalLink className="ml-1 w-3 h-3" />
+                    </a>
+                  </AlertDescription>
+                </Alert>
               </div>
             )}
           </div>
@@ -236,24 +321,51 @@ export default function ChatPage() {
             messages.map((message, index) => (
               <div
                 key={index}
-                className={cn("flex items-start gap-3 max-w-3xl", message.role === "user" ? "ml-auto" : "mr-auto")}
+                className={cn("flex items-start gap-3",
+                  message.role === "user" ? "justify-end ml-auto max-w-3xl" : "mr-auto max-w-3xl"
+                )}
               >
-                <div
-                  className={cn(
-                    "flex items-center justify-center w-8 h-8 rounded-full shrink-0",
-                    message.role === "user" ? "bg-black text-white" : "bg-[#FDBE02] text-black",
-                  )}
-                >
-                  {message.role === "user" ? <User className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
-                </div>
-                <div
-                  className={cn(
-                    "rounded-lg px-4 py-2 max-w-[85%]",
-                    message.role === "user" ? "bg-black text-white" : "bg-white border border-gray-200 text-black",
-                  )}
-                >
-                  <div className="prose prose-sm whitespace-pre-wrap">{message.content}</div>
-                </div>
+                {message.role === "user" ? (
+                  // User message - Align right
+                  <>
+                    <div
+                      className={cn(
+                        "rounded-lg px-4 py-2 max-w-[85%]",
+                        "bg-black text-white"
+                      )}
+                    >
+                      <div className="prose prose-sm whitespace-pre-wrap text-right">{message.content}</div>
+                    </div>
+                    <div
+                      className={cn(
+                        "flex items-center justify-center w-8 h-8 rounded-full shrink-0",
+                        "bg-black text-white"
+                      )}
+                    >
+                      <User className="w-5 h-5" />
+                    </div>
+                  </>
+                ) : (
+                  // Assistant message - Remain as is
+                  <>
+                    <div
+                      className={cn(
+                        "flex items-center justify-center w-8 h-8 rounded-full shrink-0",
+                        "bg-[#FDBE02] text-black"
+                      )}
+                    >
+                      <Bot className="w-5 h-5" />
+                    </div>
+                    <div
+                      className={cn(
+                        "rounded-lg px-4 py-2 max-w-[85%]",
+                        "bg-white border border-gray-200 text-black"
+                      )}
+                    >
+                      <div className="prose prose-sm whitespace-pre-wrap">{message.content}</div>
+                    </div>
+                  </>
+                )}
               </div>
             ))
           )}

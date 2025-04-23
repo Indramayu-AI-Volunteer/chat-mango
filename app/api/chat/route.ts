@@ -8,9 +8,21 @@ const cacheManager = new GoogleAICacheManager(
   process.env.GOOGLE_GENERATIVE_AI_API_KEY || '',
 );
 
-type GoogleModelCacheableId = 'models/gemini-2.0-flash';
+// Pemetaan modelId untuk versi Gemini
+type GeminiVersion =
+  'gemini-1.0-pro' |
+  'gemini-1.5-pro' |
+  'gemini-1.5-flash' |
+  'gemini-2.0-flash' |
+  'gemini-2.0-pro';
 
-const modelId: GoogleModelCacheableId = 'models/gemini-2.0-flash';
+const geminiVersionToModelId = {
+  'gemini-1.0-pro': 'models/gemini-1.0-pro',
+  'gemini-1.5-pro': 'models/gemini-1.5-pro',
+  'gemini-1.5-flash': 'models/gemini-1.5-flash',
+  'gemini-2.0-flash': 'models/gemini-2.0-flash',
+  'gemini-2.0-pro': 'models/gemini-2.0-pro'
+};
 
 // ---------- helper ----------
 interface OpenAIMessage {
@@ -33,9 +45,11 @@ function getTokenCount(contents: any[]) {
 // Interface untuk konfigurasi model
 interface ModelConfig {
   model: string;
+  gemini_version?: GeminiVersion;
   hf_token?: string;
   hf_endpoint?: string;
   hf_model_id?: string;
+  colab_endpoint?: string;
 }
 
 export async function POST(req: Request) {
@@ -48,9 +62,11 @@ export async function POST(req: Request) {
     // Pilih model berdasarkan konfigurasi
     if (modelConfig.model === "huggingface") {
       return await handleHuggingfaceRequest(messages, modelConfig);
+    } else if (modelConfig.model === "colab") {
+      return await handleColabRequest(messages, modelConfig);
     } else {
       // Default ke Gemini
-      return await handleGeminiRequest(messages);
+      return await handleGeminiRequest(messages, modelConfig);
     }
   } catch (error) {
     console.error('Error in chat API route:', error);
@@ -59,8 +75,14 @@ export async function POST(req: Request) {
 }
 
 // Handler untuk model Gemini
-async function handleGeminiRequest(messages: OpenAIMessage[]) {
+async function handleGeminiRequest(messages: OpenAIMessage[], config: ModelConfig) {
   const geminiContents = toGeminiContents(messages);
+
+  // Mendapatkan versi Gemini yang dipilih, default ke gemini-2.0-flash jika tidak ada
+  const geminiVersion = config.gemini_version || 'gemini-2.0-flash';
+  const modelId = geminiVersionToModelId[geminiVersion] || 'models/gemini-2.0-flash';
+
+  console.log(`Using Gemini version: ${geminiVersion}, modelId: ${modelId}`);
 
   // Check token count
   const tokenCount = getTokenCount(geminiContents);
@@ -72,7 +94,7 @@ async function handleGeminiRequest(messages: OpenAIMessage[]) {
     // Only cache if token count is sufficient
     try {
       const { name } = await cacheManager.create({
-        model: modelId,
+        model: modelId as any,
         contents: geminiContents,
         ttlSeconds: 60 * 5,
       });
@@ -100,7 +122,7 @@ async function handleGeminiRequest(messages: OpenAIMessage[]) {
 
   try {
     const { text } = await generateText({
-      model: google(modelId, cachedContent ? { cachedContent } : {}),
+      model: google(modelId as any, cachedContent ? { cachedContent } : {}),
       prompt: lastUserPrompt,
     });
 
@@ -211,6 +233,83 @@ async function handleHuggingfaceRequest(messages: OpenAIMessage[], config: Model
   } catch (error) {
     console.error('Error generating Huggingface response:', error);
     return formatErrorResponse("Terjadi kesalahan saat menghasilkan respons dari Huggingface.");
+  }
+}
+
+// Handler untuk model Google Colab (FastAPI)
+async function handleColabRequest(messages: OpenAIMessage[], config: ModelConfig) {
+  try {
+    // Validasi konfigurasi yang diperlukan
+    if (!config.colab_endpoint) {
+      return formatErrorResponse("URL Endpoint diperlukan untuk menggunakan Google Colab (FastAPI).");
+    }
+
+    // Ambil pesan terakhir dari pengguna
+    const lastUserMessage = messages
+      .slice()
+      .reverse()
+      .find(m => m.role === 'user');
+
+    if (!lastUserMessage) {
+      return formatErrorResponse("Tidak dapat menemukan pesan pengguna.");
+    }
+
+    // Pastikan URL endpoint diakhiri dengan / jika belum
+    let endpoint = config.colab_endpoint;
+    if (!endpoint.endsWith('/')) {
+      endpoint += '/';
+    }
+
+    // Buat payload untuk API FastAPI di Colab
+    const payload = {
+      prompt: lastUserMessage.content,
+      max_tokens: 512 // Nilai default
+    };
+
+    console.log(`Sending request to Colab endpoint: ${endpoint}`);
+
+    // Panggil API Colab
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorDetails = await response.text();
+      console.error('Colab API error:', errorDetails);
+      return formatErrorResponse(`Kesalahan dari Google Colab API: ${response.status}`);
+    }
+
+    // Parse respons dari Colab
+    const result = await response.json();
+
+    // Format respons sesuai dengan apa yang dikembalikan oleh Colab
+    // Colab mungkin mengembalikan format yang berbeda, disesuaikan
+    let aiResponse;
+
+    if (typeof result.generated_text === 'string') {
+      aiResponse = result.generated_text;
+    } else if (typeof result.text === 'string') {
+      aiResponse = result.text;
+    } else if (typeof result.response === 'string') {
+      aiResponse = result.response;
+    } else if (typeof result.output === 'string') {
+      aiResponse = result.output;
+    } else if (typeof result.output === 'string') {
+      aiResponse = result.result;
+    } else {
+      // Fallback, kembalikan JSON string jika format tidak dikenal
+      aiResponse = JSON.stringify(result);
+    }
+
+    console.log('Colab AI response:', aiResponse);
+    return formatSuccessResponse(aiResponse);
+  } catch (error) {
+    console.error('Error generating Colab response:', error);
+    return formatErrorResponse("Terjadi kesalahan saat menghasilkan respons dari Google Colab.");
   }
 }
 
