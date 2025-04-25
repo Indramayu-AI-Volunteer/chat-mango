@@ -1,12 +1,14 @@
 import { google } from '@ai-sdk/google';
-import { GoogleAICacheManager } from '@google/generative-ai/server';
+import { Content, GoogleAICacheManager } from '@google/generative-ai/server';
 import { generateText } from 'ai';
+import { config } from 'process';
 
 export const maxDuration = 30;
 
 const cacheManager = new GoogleAICacheManager(
   process.env.GOOGLE_GENERATIVE_AI_API_KEY || '',
 );
+
 
 // Pemetaan modelId untuk versi Gemini
 type GeminiVersion =
@@ -22,25 +24,15 @@ const geminiVersionToModelId = {
   'gemini-2.0-flash': 'models/gemini-2.0-flash',
 };
 
-// ---------- helper ----------
-interface OpenAIMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
-const toGeminiContents = (msgs: OpenAIMessage[]) =>
-  msgs.map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }));
+type LangAIResponse =
+  'Bahasa Jawa Indramayu' |
+  'Sesuai Prompt';
 
-// -----------------------------
-
-// Function to estimate token count for Gemini content
-function getTokenCount(contents: any[]) {
-  return contents.reduce((total, item) => total + item.parts.reduce((sum: number, part: { text: string }) => sum + part.text.split(/\s+/).length, 0), 0);
+const LangAIResponseToModelId = {
+  'Bahasa Jawa Indramayu': 'indramayu-prompt',
+  'Sesuai Prompt': 'no-template-prompt',
 }
 
-// Interface untuk konfigurasi model
 interface ModelConfig {
   model: string;
   gemini_version?: GeminiVersion;
@@ -49,6 +41,48 @@ interface ModelConfig {
   hf_model_id?: string;
   colab_endpoint?: string;
   vllm_endpoint?: string;
+  lang_ai_response?: LangAIResponse;
+}
+
+// ---------- helper ----------
+interface OpenAIMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+function IndramayuTemplate(prompt: string) {
+  return `
+  Tolong jawab pertanyaan atau permintaan saya hanya menggunakan bahasa Jawa Indramayu. Meskipun saya menggunakan bahasa Indonesia atau bahasa lain dalam pertanyaan saya, kamu tetap harus membalasnya dalam bahasa Jawa Indramayu saja, dengan tata bahasa dan kosa kata yang umum digunakan oleh penutur asli dari daerah Indramayu. Jangan gunakan bahasa Indonesia atau bahasa Jawa standar.
+
+  Berikut ini pertanyaannya:
+  ${prompt}
+  `
+}
+
+
+function toGeminiContents(msgs: OpenAIMessage[], config: ModelConfig): Content[] {
+  const LangAIResponse = config.lang_ai_response || 'Bahasa Jawa Indramayu';
+  const LangAIResponseModelId = LangAIResponseToModelId[LangAIResponse] || 'indramayu-prompt';
+
+  console.log('langAIResponse from config:', LangAIResponseModelId);
+
+  console.log(LangAIResponseModelId);
+  return msgs.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{
+      text: LangAIResponseModelId === 'indramayu-prompt'
+        ? IndramayuTemplate(m.content)
+        : m.content,
+    }],
+  }));
+}
+
+
+// -----------------------------
+
+// Function to estimate token count for Gemini content
+function getTokenCount(contents: any[]) {
+  return contents.reduce((total, item) => total + item.parts.reduce((sum: number, part: { text: string }) => sum + part.text.split(/\s+/).length, 0), 0);
 }
 
 export async function POST(req: Request) {
@@ -56,14 +90,14 @@ export async function POST(req: Request) {
     const { messages, config } = await req.json();
 
     // Default ke Gemini jika tidak ada konfigurasi
-    const modelConfig: ModelConfig = config || { model: "gemini" };
+    const modelConfig: ModelConfig = config || { model: 'gemini' };
 
     // Pilih model berdasarkan konfigurasi
-    if (modelConfig.model === "huggingface") {
+    if (modelConfig.model === 'huggingface') {
       return await handleHuggingfaceRequest(messages, modelConfig);
-    } else if (modelConfig.model === "colab") {
+    } else if (modelConfig.model === 'colab') {
       return await handleColabRequest(messages, modelConfig);
-    } else if (modelConfig.model === "vllm") {
+    } else if (modelConfig.model === 'vllm') {
       return await handleVLLMRequest(messages, modelConfig);
     } else {
       // Default ke Gemini
@@ -71,13 +105,14 @@ export async function POST(req: Request) {
     }
   } catch (error) {
     console.error('Error in chat API route:', error);
-    return formatErrorResponse("Terjadi kesalahan dalam memproses permintaan Anda.");
+    return formatErrorResponse('Terjadi kesalahan dalam memproses permintaan Anda.');
   }
 }
 
 // Handler untuk model Gemini
 async function handleGeminiRequest(messages: OpenAIMessage[], config: ModelConfig) {
-  const geminiContents = toGeminiContents(messages);
+
+  const geminiContents = toGeminiContents(messages, config);
 
   // Mendapatkan versi Gemini yang dipilih, default ke gemini-2.0-flash jika tidak ada
   const geminiVersion = config.gemini_version || 'gemini-2.0-flash';
@@ -110,7 +145,7 @@ async function handleGeminiRequest(messages: OpenAIMessage[], config: ModelConfi
   }
 
   // Get the last user message as the main prompt
-  let lastUserPrompt = "";
+  let lastUserPrompt = '';
 
   const lastUserMessage = geminiContents
     .slice()
@@ -118,7 +153,7 @@ async function handleGeminiRequest(messages: OpenAIMessage[], config: ModelConfi
     .find((c) => c.role === 'user');
 
   if (lastUserMessage && lastUserMessage.parts && lastUserMessage.parts[0]) {
-    lastUserPrompt = lastUserMessage.parts[0].text;
+    lastUserPrompt = lastUserMessage.parts[0].text || '';
   }
 
   try {
@@ -132,7 +167,7 @@ async function handleGeminiRequest(messages: OpenAIMessage[], config: ModelConfi
     return formatSuccessResponse(text);
   } catch (error) {
     console.error('Error generating Gemini response:', error);
-    return formatErrorResponse("Terjadi kesalahan saat menghasilkan respons dari Gemini.");
+    return formatErrorResponse('Terjadi kesalahan saat menghasilkan respons dari Gemini.');
   }
 }
 
@@ -141,11 +176,11 @@ async function handleHuggingfaceRequest(messages: OpenAIMessage[], config: Model
   try {
     // Validasi konfigurasi yang diperlukan
     if (!config.hf_token || !config.hf_endpoint) {
-      return formatErrorResponse("HF Token dan Endpoint URL diperlukan untuk menggunakan model Huggingface.");
+      return formatErrorResponse('HF Token dan Endpoint URL diperlukan untuk menggunakan model Huggingface.');
     }
 
     // Gunakan model ID default
-    const modelId = "mistralai/Mistral-7B-Instruct-v0.2";
+    const modelId = 'mistralai/Mistral-7B-Instruct-v0.2';
     console.log(`Using default Huggingface model: ${modelId}`);
 
     // Ambil pesan terakhir dari pengguna
@@ -155,7 +190,7 @@ async function handleHuggingfaceRequest(messages: OpenAIMessage[], config: Model
       .find(m => m.role === 'user');
 
     if (!lastUserMessage) {
-      return formatErrorResponse("Tidak dapat menemukan pesan pengguna.");
+      return formatErrorResponse('Tidak dapat menemukan pesan pengguna.');
     }
 
     // Batas token untuk model Huggingface
@@ -171,7 +206,7 @@ async function handleHuggingfaceRequest(messages: OpenAIMessage[], config: Model
     if (estimatedTokens > TOKEN_LIMIT - MIN_OUTPUT_TOKENS) {
       // Kita perlu memotong input
       const maxInputChars = (TOKEN_LIMIT - MIN_OUTPUT_TOKENS) * 4;
-      processedInput = processedInput.substring(0, maxInputChars) + "... [teks terpotong karena terlalu panjang]";
+      processedInput = processedInput.substring(0, maxInputChars) + '... [teks terpotong karena terlalu panjang]';
       console.log(`Input terlalu panjang, dipotong dari ${inputLength} ke ${processedInput.length} karakter`);
     }
 
@@ -233,7 +268,7 @@ async function handleHuggingfaceRequest(messages: OpenAIMessage[], config: Model
     return formatSuccessResponse(aiResponse);
   } catch (error) {
     console.error('Error generating Huggingface response:', error);
-    return formatErrorResponse("Terjadi kesalahan saat menghasilkan respons dari Huggingface.");
+    return formatErrorResponse('Terjadi kesalahan saat menghasilkan respons dari Huggingface.');
   }
 }
 
@@ -242,7 +277,7 @@ async function handleColabRequest(messages: OpenAIMessage[], config: ModelConfig
   try {
     // Validasi konfigurasi yang diperlukan
     if (!config.colab_endpoint) {
-      return formatErrorResponse("URL Endpoint diperlukan untuk menggunakan Google Colab (FastAPI).");
+      return formatErrorResponse('URL Endpoint diperlukan untuk menggunakan Google Colab (FastAPI).');
     }
 
     // Ambil pesan terakhir dari pengguna
@@ -252,7 +287,7 @@ async function handleColabRequest(messages: OpenAIMessage[], config: ModelConfig
       .find(m => m.role === 'user');
 
     if (!lastUserMessage) {
-      return formatErrorResponse("Tidak dapat menemukan pesan pengguna.");
+      return formatErrorResponse('Tidak dapat menemukan pesan pengguna.');
     }
 
     // Pastikan URL endpoint diakhiri dengan / jika belum
@@ -310,7 +345,7 @@ async function handleColabRequest(messages: OpenAIMessage[], config: ModelConfig
     return formatSuccessResponse(aiResponse);
   } catch (error) {
     console.error('Error generating Colab response:', error);
-    return formatErrorResponse("Terjadi kesalahan saat menghasilkan respons dari Google Colab.");
+    return formatErrorResponse('Terjadi kesalahan saat menghasilkan respons dari Google Colab.');
   }
 }
 
@@ -319,7 +354,7 @@ async function handleVLLMRequest(messages: OpenAIMessage[], config: ModelConfig)
   try {
     // Validasi konfigurasi yang diperlukan
     if (!config.vllm_endpoint) {
-      return formatErrorResponse("URL Endpoint diperlukan untuk menggunakan model VLLM.");
+      return formatErrorResponse('URL Endpoint diperlukan untuk menggunakan model VLLM.');
     }
 
     // Gunakan endpoint apa adanya, tanpa modifikasi
@@ -335,7 +370,7 @@ async function handleVLLMRequest(messages: OpenAIMessage[], config: ModelConfig)
 
     // Buat payload sesuai dengan format OpenAI chat completion
     const payload = {
-      model: "any", // Parameter model default sesuai contoh
+      model: 'any', // Parameter model default sesuai contoh
       messages: formattedMessages,
       max_tokens: 512
     };
@@ -400,7 +435,7 @@ function formatSuccessResponse(text: string) {
     choices: [
       {
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: text
         }
       }
@@ -419,7 +454,7 @@ function formatErrorResponse(errorMessage: string) {
     choices: [
       {
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: errorMessage
         }
       }

@@ -44,6 +44,11 @@ const geminiVersions = [
   "gemini-2.0-flash"
 ];
 
+const LangAIResponses = [
+  "Bahasa Jawa Indramayu",
+  "Sesuai Prompt"
+];
+
 export default function ChatPage() {
   const router = useRouter();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -57,6 +62,7 @@ export default function ChatPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState("gemini");
   const [geminiVersion, setGeminiVersion] = useState("gemini-2.0-flash");
+  const [langAIResponse, setLangAIResponse] = useState("Bahasa Jawa Indramayu");
   const [hfToken, setHfToken] = useState("");
   const [hfEndpoint, setHfEndpoint] = useState("");
   const [colabEndpoint, setColabEndpoint] = useState("");
@@ -205,6 +211,7 @@ export default function ChatPage() {
     setIsLoading(true);
 
     try {
+
       // Send to API with model configuration
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -216,7 +223,8 @@ export default function ChatPage() {
           config: {
             model: selectedModel,
             ...(selectedModel === "gemini" && {
-              gemini_version: geminiVersion
+              gemini_version: geminiVersion,
+              lang_ai_response: langAIResponse
             }),
             ...(selectedModel === "huggingface" && {
               hf_token: hfToken,
@@ -261,10 +269,13 @@ export default function ChatPage() {
 
   // Handle saving settings
   const handleSaveSettings = () => {
+    // console.log langAIResponse from localStorage
+    // console.log("langAIResponse from localStorage:", langAIResponse);
     // Simpan pengaturan (bisa ditambahkan ke localStorage)
     localStorage.setItem("chatSettings", JSON.stringify({
       model: selectedModel,
       geminiVersion: geminiVersion,
+      langAIResponse: langAIResponse,
       hfToken: hfToken,
       hfEndpoint: hfEndpoint,
       colabEndpoint: colabEndpoint,
@@ -283,6 +294,7 @@ export default function ChatPage() {
         const settings = JSON.parse(savedSettings);
         setSelectedModel(settings.model || "gemini");
         setGeminiVersion(settings.geminiVersion || "gemini-2.0-flash");
+        setLangAIResponse(settings.langAIResponse || "Bahasa Jawa Indramayu");
         setHfToken(settings.hfToken || "");
         setHfEndpoint(settings.hfEndpoint || "");
         setColabEndpoint(settings.colabEndpoint || "");
@@ -430,7 +442,26 @@ export default function ChatPage() {
                           </SelectContent>
                         </Select>
                       </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lang-ai-response" className="text-sm font-medium">Bahasa Untuk Respon AI</Label>
+                        <Select
+                          value={langAIResponse}
+                          onValueChange={setLangAIResponse}
+                        >
+                          <SelectTrigger id="lang-ai-response">
+                            <SelectValue placeholder="Select version" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {LangAIResponses.map((version) => (
+                              <SelectItem key={version} value={version}>
+                                {version}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
+
                   )}
 
                   {/* Huggingface Settings */}
