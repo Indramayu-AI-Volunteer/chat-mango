@@ -359,14 +359,14 @@ export default function ChatPage() {
             {/* Account trigger */}
             <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
               <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="w-full justify-start">
+                <Button variant="ghost" size="icon" className="w-full justify-start" disabled>
                   <User className="w-5 h-5 mr-2" />
-                  Account
+                  Account (Unavailable)
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Account</DialogTitle>
+                  <DialogTitle>Account(Unavailable)</DialogTitle>
                 </DialogHeader>
                 <DialogFooter className="flex space-x-2">
                   <Button variant="outline" onClick={() => { setAccountOpen(false); router.push("/login"); }}>
@@ -379,11 +379,11 @@ export default function ChatPage() {
               </DialogContent>
             </Dialog>
             {/* Feedback & Donate buttons */}
-            <Button variant="ghost" size="icon" className="w-full justify-start" onClick={() => window.open('https://example.com/feedback', '_blank')}>
+            <Button variant="ghost" size="icon" className="w-full justify-start" onClick={() => window.open('https://forms.gle/Qjum5TAo3MjkzcH99', '_blank')}>
               <ExternalLink className="w-5 h-5 mr-2" />
               Feedback
             </Button>
-            <Button variant="ghost" size="icon" className="w-full justify-start" onClick={() => window.open('https://example.com/donate', '_blank')}>
+            <Button variant="ghost" size="icon" className="w-full justify-start" onClick={() => window.open('https://saweria.co/herutriana44', '_blank')}>
               <ExternalLink className="w-5 h-5 mr-2" />
               Donate
             </Button>
@@ -415,8 +415,8 @@ export default function ChatPage() {
                         <SelectItem value="gemini">Gemini</SelectItem>
                         <SelectItem value="huggingface">Huggingface</SelectItem>
                         <SelectItem value="colab">Google Colab(FastAPI)</SelectItem>
-                        <SelectItem value="pellm">PeLLM-Komodo (unavailable)</SelectItem>
-                        <SelectItem value="vllm">VLLM (unavailable)</SelectItem>
+                        <SelectItem value="pellm" disabled>PeLLM-Komodo (unavailable)</SelectItem>
+                        <SelectItem value="vllm" disabled>VLLM (unavailable)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -467,6 +467,11 @@ export default function ChatPage() {
                   {/* Huggingface Settings */}
                   {selectedModel === "huggingface" && (
                     <div className="space-y-3">
+                      <Alert className="bg-red-50 text-red-800 border-red-200 text-xs">
+                        <AlertDescription>
+                          Ini adalah mode pengembang/developer mode
+                        </AlertDescription>
+                      </Alert>
                       <div className="space-y-2">
                         <Label htmlFor="hf-token" className="text-sm font-medium">HF Token</Label>
                         <Input
@@ -493,6 +498,11 @@ export default function ChatPage() {
                   {/* Google Colab Settings */}
                   {selectedModel === "colab" && (
                     <div className="space-y-3">
+                      <Alert className="bg-red-50 text-red-800 border-red-200 text-xs">
+                        <AlertDescription>
+                          Ini adalah mode pengembang/developer mode
+                        </AlertDescription>
+                      </Alert>
                       <div className="space-y-2">
                         <Label htmlFor="colab-endpoint" className="text-sm font-medium">URL Endpoint</Label>
                         <Input
@@ -523,6 +533,11 @@ export default function ChatPage() {
                   {/* VLLM Settings */}
                   {selectedModel === "vllm" && (
                     <div className="space-y-3">
+                      <Alert className="bg-red-50 text-red-800 border-red-200 text-xs">
+                        <AlertDescription>
+                          Ini adalah mode pengembang/developer mode
+                        </AlertDescription>
+                      </Alert>
                       <div className="space-y-2">
                         <Label htmlFor="vllm-endpoint" className="text-sm font-medium">URL Endpoint</Label>
                         <Input
@@ -582,10 +597,9 @@ export default function ChatPage() {
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center text-[#FDBE02]">
                 <TopengIcon style={{ width: '14rem', height: '14rem' }} className="mb-4 text-[#FDBE02]" />
-                <h2 className="text-xl font-semibold mb-2">Welcome to chatMango</h2>
+                <h2 className="text-xl font-semibold mb-2">chatMango</h2>
                 <p className="max-w-md">
-                  Ask me anything and I'll do my best to help you. I can answer questions, provide information, and assist
-                  with various tasks.
+                  Takon apa bae, reang sing jawab
                 </p>
               </div>
             ) : (
