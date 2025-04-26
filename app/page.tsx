@@ -316,12 +316,6 @@ export default function ChatPage() {
         "flex w-full min-h-[90vh] max-h-[90vh] bg-white",
         viewMode === 'lightwidescreen' && "rounded-2xl overflow-hidden shadow-lg max-w-[80%] mx-auto"
       )}>
-        <button
-          className="fixed top-4 left-4 z-50 md:hidden bg-white border rounded p-2 shadow"
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        >
-          <Menu className="w-5 h-5" />
-        </button>
 
         {/* Sidebar with sessions and Settings */}
         <div
@@ -333,6 +327,12 @@ export default function ChatPage() {
           {/* Sessions list */}
           <div className="overflow-y-auto flex-1 p-4">
             <div className="flex items-center justify-between mb-4">
+              <button
+                className="flex md:hidden"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              >
+                <Menu className="w-5 h-5" />
+              </button>
               <h3 className="text-lg font-semibold">Chat Sessions</h3>
               <Button variant="ghost" size="icon" onClick={newSession}>
                 <Plus className="w-4 h-4" />
@@ -578,7 +578,12 @@ export default function ChatPage() {
           {/* Header */}
           <header className="flex items-center justify-between px-4 py-3 border-b bg-[#FDBE02] text-white flex-shrink-0">
             <div className="flex items-center">
-              <MangoIcon className="w-6 h-6 mr-2 text-white" />
+              <button
+                className="flex md:hidden"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              >
+                <MangoIcon className="w-6 h-6 mr-2 text-white" />
+              </button>
               <h1 className="text-xl font-bold">chatMango</h1>
             </div>
             <div className="flex gap-2">
