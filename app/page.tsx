@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Send, User, Loader2, Settings, Save, ExternalLink, Maximize, Minimize, Plus, Trash2 } from "lucide-react"
+import { Send, User, Loader2, Settings, Save, ExternalLink, Maximize, Minimize, Plus, Trash2, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
@@ -70,6 +70,8 @@ export default function ChatPage() {
 
   // State untuk mode tampilan
   const [viewMode, setViewMode] = useState<ViewMode>('lightwidescreen');
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Chat sessions state and persistence
   interface Session {
@@ -314,8 +316,20 @@ export default function ChatPage() {
         "flex w-full min-h-[90vh] max-h-[90vh] bg-white",
         viewMode === 'lightwidescreen' && "rounded-2xl overflow-hidden shadow-lg max-w-[80%] mx-auto"
       )}>
+        <button
+          className="fixed top-4 left-4 z-50 md:hidden bg-white border rounded p-2 shadow"
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
         {/* Sidebar with sessions and Settings */}
-        <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r flex flex-col justify-between md:relative md:translate-x-0">
+        <div
+          className={cn(
+            "fixed inset-y-0 left-0 z-40 w-64 bg-white border-r flex flex-col justify-between transform transition-transform duration-300 md:relative md:translate-x-0",
+            isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          )}
+        >
           {/* Sessions list */}
           <div className="overflow-y-auto flex-1 p-4">
             <div className="flex items-center justify-between mb-4">
