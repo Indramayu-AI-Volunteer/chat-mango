@@ -11,7 +11,7 @@
   "dependencies": {
     "@ai-sdk/google": "^1.2.12",
     "@ai-sdk/react": "latest",
-    "@google/generative-ai": "^0.24.0",
+    "@google/genai": "^1.0.0",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",

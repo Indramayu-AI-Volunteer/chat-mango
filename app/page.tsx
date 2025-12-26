@@ -36,12 +36,12 @@ interface ChatMessage {
 // Tipe untuk mode tampilan
 type ViewMode = 'fullscreen' | 'lightwidescreen';
 
-// Daftar versi model Gemini
+// Daftar versi model Gemini v2 (terbaru)
 const geminiVersions = [
-  "gemini-1.0-pro",
-  "gemini-1.5-pro",
-  "gemini-1.5-flash",
-  "gemini-2.0-flash"
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-3-flash-preview',
+  'gemini-3-pro'
 ];
 
 const LangAIResponses = [
@@ -61,8 +61,10 @@ export default function ChatPage() {
   // State untuk sidebar
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState("gemini");
-  const [geminiVersion, setGeminiVersion] = useState("gemini-2.0-flash");
+  // Default ke gemini-2.5-flash (v2 model)
+  const [geminiVersion, setGeminiVersion] = useState("gemini-2.5-flash");
   const [langAIResponse, setLangAIResponse] = useState("Bahasa Jawa Indramayu");
+  const [customGeminiModelId, setCustomGeminiModelId] = useState("");
   const [hfToken, setHfToken] = useState("");
   const [hfEndpoint, setHfEndpoint] = useState("");
   const [colabEndpoint, setColabEndpoint] = useState("");
@@ -206,6 +208,15 @@ export default function ChatPage() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    // Validasi untuk Gemini v2
+    if (selectedModel === 'gemini') {
+      // Jika custom model ID tidak diisi, gunakan versi yang dipilih
+      if (!customGeminiModelId.trim() && !geminiVersion) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: 'Silakan pilih Gemini Version atau masukkan Custom Gemini Model ID di Settings.' }]);
+        return;
+      }
+    }
+
     // Add user message
     const userMessage: ChatMessage = { role: 'user', content: input.trim() };
     setMessages((prev) => [...prev, userMessage]);
@@ -226,7 +237,8 @@ export default function ChatPage() {
             model: selectedModel,
             ...(selectedModel === "gemini" && {
               gemini_version: geminiVersion,
-              lang_ai_response: langAIResponse
+              lang_ai_response: langAIResponse,
+              custom_gemini_model_id: customGeminiModelId
             }),
             ...(selectedModel === "huggingface" && {
               hf_token: hfToken,
@@ -277,6 +289,7 @@ export default function ChatPage() {
     localStorage.setItem("chatSettings", JSON.stringify({
       model: selectedModel,
       geminiVersion: geminiVersion,
+      customGeminiModelId: customGeminiModelId,
       langAIResponse: langAIResponse,
       hfToken: hfToken,
       hfEndpoint: hfEndpoint,
@@ -295,7 +308,9 @@ export default function ChatPage() {
       try {
         const settings = JSON.parse(savedSettings);
         setSelectedModel(settings.model || "gemini");
-        setGeminiVersion(settings.geminiVersion || "gemini-2.0-flash");
+        // Use a valid default v2 model present in geminiVersions list
+        setGeminiVersion(settings.geminiVersion || "gemini-2.5-flash");
+        setCustomGeminiModelId(settings.customGeminiModelId || "");
         setLangAIResponse(settings.langAIResponse || "Bahasa Jawa Indramayu");
         setHfToken(settings.hfToken || "");
         setHfEndpoint(settings.hfEndpoint || "");
@@ -474,8 +489,28 @@ export default function ChatPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                    </div>
 
+                      <div className="space-y-2">
+                        <Label htmlFor="custom-gemini-model" className="text-sm font-medium">Custom Gemini Model ID (optional)</Label>
+                        <Input
+                          id="custom-gemini-model"
+                          type="text"
+                          value={customGeminiModelId}
+                          onChange={(e) => setCustomGeminiModelId(e.target.value)}
+                          placeholder="e.g. models/your-gemini-model-id"
+                        />
+                      </div>
+
+                      {/* Info about Gemini v2 models */}
+                      {geminiVersion && (
+                        <Alert className="bg-blue-50 text-blue-800 border-blue-200 text-xs">
+                          <AlertDescription>
+                            Menggunakan Gemini API v2 dengan model: {geminiVersion}. Semua model dalam daftar ini adalah model v2 yang didukung.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                    </div>
                   )}
 
                   {/* Huggingface Settings */}

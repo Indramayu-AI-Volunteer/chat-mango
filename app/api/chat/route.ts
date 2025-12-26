@@ -1,25 +1,21 @@
-import { google } from '@ai-sdk/google';
-import { Content, GoogleAICacheManager } from '@google/generative-ai/server';
-import { generateText } from 'ai';
-import { config } from 'process';
-
 export const maxDuration = 30;
 
-const cacheManager = new GoogleAICacheManager(
-  process.env.GOOGLE_GENERATIVE_AI_API_KEY || '',
-);
+// Gemini API v2 endpoint
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const GEMINI_API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY || '';
 
-
-// Pemetaan modelId untuk versi Gemini
+// Pemetaan modelId untuk versi Gemini v2 (terbaru)
 type GeminiVersion =
-  'gemini-2.5-pro' |
   'gemini-2.5-flash' |
-  'gemini-2.5-flash-lite';
+  'gemini-2.5-pro' |
+  'gemini-3-flash-preview' |
+  'gemini-3-pro';
 
 const geminiVersionToModelId = {
-  'gemini-2.5-pro': 'models/gemini-2.5-pro',
-  'gemini-2.5-flash': 'models/gemini-2.5-flash',
-  'gemini-2.5-flash-lite': 'models/gemini-2.5-flash-lite',
+  'gemini-2.5-flash': 'gemini-2.5-flash',
+  'gemini-2.5-pro': 'gemini-2.5-pro',
+  'gemini-3-flash-preview': 'gemini-3-flash-preview',
+  'gemini-3-pro': 'gemini-3-pro',
 };
 
 type LangAIResponse =
@@ -34,6 +30,8 @@ const LangAIResponseToModelId = {
 interface ModelConfig {
   model: string;
   gemini_version?: GeminiVersion;
+  // Optional custom model id for Gemini, allows users to specify a full model id (eg: "models/your-gemini-model")
+  custom_gemini_model_id?: string;
   hf_token?: string;
   hf_endpoint?: string;
   hf_model_id?: string;
@@ -58,29 +56,38 @@ function IndramayuTemplate(prompt: string) {
 }
 
 
-function toGeminiContents(msgs: OpenAIMessage[], config: ModelConfig): Content[] {
+// Convert OpenAI messages to format compatible with Gemini API v2
+function toGeminiContents(msgs: OpenAIMessage[], config: ModelConfig) {
   const LangAIResponse = config.lang_ai_response || 'Bahasa Jawa Indramayu';
   const LangAIResponseModelId = LangAIResponseToModelId[LangAIResponse] || 'indramayu-prompt';
 
   console.log('langAIResponse from config:', LangAIResponseModelId);
 
-  console.log(LangAIResponseModelId);
-  return msgs.map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{
-      text: LangAIResponseModelId === 'indramayu-prompt'
-        ? IndramayuTemplate(m.content)
-        : m.content,
-    }],
-  }));
+  const contents = [];
+  
+  for (const msg of msgs) {
+    const role = msg.role === 'assistant' ? 'model' : 'user';
+    const text = LangAIResponseModelId === 'indramayu-prompt' && msg.role === 'user'
+      ? IndramayuTemplate(msg.content)
+      : msg.content;
+    
+    contents.push({
+      role,
+      parts: [{ text }]
+    });
+  }
+  
+  return contents;
 }
-
-
-// -----------------------------
 
 // Function to estimate token count for Gemini content
 function getTokenCount(contents: any[]) {
-  return contents.reduce((total, item) => total + item.parts.reduce((sum: number, part: { text: string }) => sum + part.text.split(/\s+/).length, 0), 0);
+  return contents.reduce((total, item) => {
+    const textParts = item.parts || [];
+    return total + textParts.reduce((sum: number, part: { text: string }) => {
+      return sum + (part.text ? part.text.split(/\s+/).length : 0);
+    }, 0);
+  }, 0);
 }
 
 export async function POST(req: Request) {
@@ -107,65 +114,88 @@ export async function POST(req: Request) {
   }
 }
 
-// Handler untuk model Gemini
+// Handler untuk model Gemini (v2 API)
 async function handleGeminiRequest(messages: OpenAIMessage[], config: ModelConfig) {
-
-  const geminiContents = toGeminiContents(messages, config);
-
-  // Mendapatkan versi Gemini yang dipilih, default ke gemini-2.5-flash-lite jika tidak ada
-  const geminiVersion = config.gemini_version || 'gemini-2.5-flash-lite';
-  const modelId = geminiVersionToModelId[geminiVersion] || 'models/gemini-2.5-flash-lite';
-
-  console.log(`Using Gemini version: ${geminiVersion}, modelId: ${modelId}`);
-
-  // Check token count
-  const tokenCount = getTokenCount(geminiContents);
-  const minTokenCount = 4096;
-
-  let cachedContent = null;
-
-  if (tokenCount >= minTokenCount) {
-    // Only cache if token count is sufficient
-    try {
-      const { name } = await cacheManager.create({
-        model: modelId as any,
-        contents: geminiContents,
-        ttlSeconds: 60 * 5,
-      });
-
-      if (name) {
-        cachedContent = name;
-      }
-    } catch (error) {
-      console.error('Error creating cache:', error);
-      // Continue without cache if there's an error
-    }
-  }
-
-  // Get the last user message as the main prompt
-  let lastUserPrompt = '';
-
-  const lastUserMessage = geminiContents
-    .slice()
-    .reverse()
-    .find((c) => c.role === 'user');
-
-  if (lastUserMessage && lastUserMessage.parts && lastUserMessage.parts[0]) {
-    lastUserPrompt = lastUserMessage.parts[0].text || '';
-  }
-
   try {
-    const { text } = await generateText({
-      model: google(modelId as any, cachedContent ? { cachedContent } : {}),
-      prompt: lastUserPrompt,
+    const geminiContents = toGeminiContents(messages, config);
+
+    // Mendapatkan versi Gemini yang dipilih, default ke gemini-2.5-flash jika tidak ada
+    const geminiVersion = config.gemini_version || 'gemini-2.5-flash';
+
+    // Allow overriding the model id directly
+    const customGeminiModelId = config.custom_gemini_model_id && String(config.custom_gemini_model_id).trim() !== ''
+      ? String(config.custom_gemini_model_id).trim()
+      : null;
+
+    let modelId = customGeminiModelId || geminiVersionToModelId[geminiVersion] || 'gemini-2.5-flash';
+    
+    // Remove "models/" prefix if present (REST API adds it automatically)
+    if (modelId.startsWith('models/')) {
+      modelId = modelId.replace('models/', '');
+    }
+
+    console.log(`Using Gemini v2 API - version: ${geminiVersion}, modelId: ${modelId}${customGeminiModelId ? ' (custom override)' : ''}`);
+
+    // Build contents array for Gemini API v2
+    const contents = geminiContents.map(content => ({
+      role: content.role,
+      parts: content.parts
+    }));
+
+    // Call Gemini API v2 using REST API
+    const apiUrl = `${GEMINI_API_BASE}/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
+    
+    const apiResponse = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: contents,
+      }),
     });
 
-    console.log('Gemini AI response:', text);
+    if (!apiResponse.ok) {
+      const errorData = await apiResponse.text();
+      throw new Error(`Gemini API error: ${apiResponse.status} - ${errorData}`);
+    }
 
-    return formatSuccessResponse(text);
-  } catch (error) {
+    const response = await apiResponse.json();
+
+    // Extract text from response
+    let responseText = '';
+    if (response.candidates && response.candidates.length > 0) {
+      const candidate = response.candidates[0];
+      if (candidate.content && candidate.content.parts) {
+        responseText = candidate.content.parts
+          .map((part: any) => part.text || '')
+          .join('');
+      }
+    }
+
+    if (!responseText) {
+      console.warn('Empty response from Gemini API');
+      return formatErrorResponse('Tidak ada respons dari Gemini API.');
+    }
+
+    console.log('Gemini AI response:', responseText);
+    return formatSuccessResponse(responseText);
+  } catch (error: any) {
     console.error('Error generating Gemini response:', error);
-    return formatErrorResponse('Terjadi kesalahan saat menghasilkan respons dari Gemini.');
+
+    const message = typeof error?.message === 'string' ? error.message : '';
+    
+    // Handle API key errors
+    if (message.includes('API key') || message.includes('authentication')) {
+      return formatErrorResponse('Kesalahan autentikasi. Pastikan GOOGLE_GENERATIVE_AI_API_KEY sudah diatur dengan benar.');
+    }
+
+    // Handle model not found errors
+    if (message.includes('not found') || message.includes('404')) {
+      return formatErrorResponse(`Model tidak ditemukan. Pastikan model ID yang digunakan valid untuk Gemini API v2.`);
+    }
+
+    return formatErrorResponse(`Terjadi kesalahan saat menghasilkan respons dari Gemini: ${message || 'Unknown error'}`);
   }
 }
 
