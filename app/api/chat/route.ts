@@ -12,16 +12,14 @@ const cacheManager = new GoogleAICacheManager(
 
 // Pemetaan modelId untuk versi Gemini
 type GeminiVersion =
-  'gemini-1.0-pro' |
-  'gemini-1.5-pro' |
-  'gemini-1.5-flash' |
-  'gemini-2.0-flash';
+  'gemini-2.5-pro' |
+  'gemini-2.5-flash' |
+  'gemini-2.5-flash-lite';
 
 const geminiVersionToModelId = {
-  'gemini-1.0-pro': 'models/gemini-1.0-pro',
-  'gemini-1.5-pro': 'models/gemini-1.5-pro',
-  'gemini-1.5-flash': 'models/gemini-1.5-flash',
-  'gemini-2.0-flash': 'models/gemini-2.0-flash',
+  'gemini-2.5-pro': 'models/gemini-2.5-pro',
+  'gemini-2.5-flash': 'models/gemini-2.5-flash',
+  'gemini-2.5-flash-lite': 'models/gemini-2.5-flash-lite',
 };
 
 type LangAIResponse =
