@@ -112,9 +112,9 @@ async function handleGeminiRequest(messages: OpenAIMessage[], config: ModelConfi
 
   const geminiContents = toGeminiContents(messages, config);
 
-  // Mendapatkan versi Gemini yang dipilih, default ke gemini-2.0-flash jika tidak ada
-  const geminiVersion = config.gemini_version || 'gemini-2.0-flash';
-  const modelId = geminiVersionToModelId[geminiVersion] || 'models/gemini-2.0-flash';
+  // Mendapatkan versi Gemini yang dipilih, default ke gemini-2.5-flash-lite jika tidak ada
+  const geminiVersion = config.gemini_version || 'gemini-2.5-flash-lite';
+  const modelId = geminiVersionToModelId[geminiVersion] || 'models/gemini-2.5-flash-lite';
 
   console.log(`Using Gemini version: ${geminiVersion}, modelId: ${modelId}`);
 
