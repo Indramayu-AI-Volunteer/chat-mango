@@ -7,9 +7,8 @@ import 'katex/dist/katex.min.css'
 
 const inter = Inter({ subsets: ["latin"] })
 
-const baseUrl = `https://chat-mango.vercel.app`
-  // process.env.NEXT_PUBLIC_SITE_URL ||
-  // (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://chatmango.vercel.app")
+const baseUrl =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://chat-mango.vercel.app"
 
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
