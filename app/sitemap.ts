@@ -6,25 +6,21 @@ const baseUrl =
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: baseUrl,
+      url: baseUrl.replace(/\/$/, ""),
       lastModified: new Date(),
-      changeFrequency: "weekly",
+      changeFrequency: "weekly" as const,
       priority: 1,
-      images: [
-        `${baseUrl}/favicon.svg`,
-        `${baseUrl}/images/fix_chatMango-removebg-preview.svg`,
-      ],
     },
     {
-      url: `${baseUrl}/login`,
+      url: `${baseUrl.replace(/\/$/, "")}/login`,
       lastModified: new Date(),
-      changeFrequency: "monthly",
+      changeFrequency: "monthly" as const,
       priority: 0.7,
     },
     {
-      url: `${baseUrl}/register`,
+      url: `${baseUrl.replace(/\/$/, "")}/register`,
       lastModified: new Date(),
-      changeFrequency: "monthly",
+      changeFrequency: "monthly" as const,
       priority: 0.7,
     },
   ]
