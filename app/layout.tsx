@@ -67,6 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="id">
       <head>
         <link rel="icon" href="/favicon.svg" />
+        <meta name="google-site-verification" content="2gmumy-6QJqokZ-eBWIYUwPBlvDJS5o-J9YfY390bjg" />
       </head>
       <body className={inter.className}>
         <ThemeProvider
